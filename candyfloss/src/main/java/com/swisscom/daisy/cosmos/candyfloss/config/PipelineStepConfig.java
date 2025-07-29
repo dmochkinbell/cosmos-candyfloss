@@ -38,17 +38,28 @@ public class PipelineStepConfig {
       normalizeCountersConfig = Optional.empty();
     }
 
-    final OutputFormat outputFormat =
-        OutputFormat.valueOf(
-            ((String) configs.getOrDefault("outputFormat", "JSON")).toUpperCase());
-    final Optional<String> avroSubjectName =
-        Optional.ofNullable((String) configs.get("avroSubjectName"));
+    final Map<String, Object> outputConfig = (Map<String, Object>) configs.get("output");
+    final OutputFormat outputFormat;
+    final Optional<String> avroSubjectName;
+
+    if (outputConfig != null) {
+      outputFormat =
+          OutputFormat.valueOf(
+              ((String) outputConfig.getOrDefault("format", "JSON")).toUpperCase());
+      avroSubjectName = Optional.ofNullable((String) outputConfig.get("avroSubjectName"));
+    } else {
+      // Defaults if "output" block is missing
+      outputFormat = OutputFormat.JSON;
+      avroSubjectName = Optional.empty();
+    }
 
     if (outputFormat == OutputFormat.AVRO && avroSubjectName.isEmpty()) {
       throw new InvalidConfigurations(
           "Pipeline step '" + stepTag + "' is configured for AVRO output but is missing 'avroSubjectName'.");
     }
 
-    return new PipelineStepConfig(outputTopic, match, transform, normalizeCountersConfig, outputFormat, avroSubjectName);
+    return new PipelineStepConfig(
+        outputTopic, match, transform, normalizeCountersConfig, outputFormat, avroSubjectName);
+  }
   }
 }
