@@ -24,8 +24,8 @@ public class PipelineStepConfig {
 
   @SuppressWarnings("unchecked")
   public static PipelineStepConfig fromJson(
-      String outputTopic, Map<String, Object> configs, String stepTag)
-      throws InvalidConfigurations, InvalidMatchConfiguration {
+    String outputTopic, Map<String, Object> configs, String stepTag)
+    throws InvalidConfigurations, InvalidMatchConfiguration {
     var match = MatchBuilder.fromJson((Map<String, Object>) configs.get("match"), stepTag);
     var transform = (List<Map<String, Object>>) configs.get("transform");
     final Optional<NormalizeCountersConfig> normalizeCountersConfig;
@@ -60,6 +60,5 @@ public class PipelineStepConfig {
 
     return new PipelineStepConfig(
         outputTopic, match, transform, normalizeCountersConfig, outputFormat, avroSubjectName);
-  }
   }
 }
