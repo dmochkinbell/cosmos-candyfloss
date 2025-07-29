@@ -15,6 +15,7 @@ dependencyResolutionManagement {
             library('kafka-clients', 'org.apache.kafka:kafka-clients:7.9.0-ccs')
             library('avro-serde', 'io.confluent:kafka-streams-avro-serde:7.9.0')
             library('avro-serializer', 'io.confluent:kafka-avro-serializer:7.9.0')
+            library('schema-registry-client', 'io.confluent:kafka-schema-registry-client:7.9.0')
             // Json related
             library('jolt-core', 'com.bazaarvoice.jolt:jolt-core:0.1.7')
             library('jolt-json-utils', 'com.bazaarvoice.jolt:json-utils:0.1.7')

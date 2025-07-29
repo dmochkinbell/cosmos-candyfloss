@@ -1,5 +1,6 @@
 package com.swisscom.daisy.cosmos.candyfloss;
 
+import com.jayway.jsonpath.DocumentContext;
 import com.swisscom.daisy.cosmos.candyfloss.config.JsonKStreamApplicationConfig;
 import com.swisscom.daisy.cosmos.candyfloss.config.MetricRegistryConfig;
 import com.swisscom.daisy.cosmos.candyfloss.config.exceptions.InvalidConfigurations;
@@ -8,7 +9,7 @@ import com.swisscom.daisy.cosmos.candyfloss.monitors.RestoreLogger;
 import com.swisscom.daisy.cosmos.candyfloss.monitors.StateLogger;
 import com.swisscom.daisy.cosmos.candyfloss.processors.*;
 import com.swisscom.daisy.cosmos.candyfloss.transformations.Transformer;
-import com.swisscom.daisy.cosmos.candyfloss.transformations.match.exceptions.InvalidMatchConfiguration;
+import com.swisscom.daisy.cosmos.candyfloss.transformations.match.exceptions.*;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
@@ -124,7 +125,6 @@ public class CandyflossKStreamsApplication {
 
   public Topology buildTopology() {
     Serde<String> stringSerde = Serdes.String();
-
     StreamsBuilder builder = new StreamsBuilder();
 
     // Persistent TimestampedStore to hold the counter values for the counter normalization step.
@@ -241,15 +241,25 @@ public class CandyflossKStreamsApplication {
             .get("counterNormalizationBranchError0")
             .mapValues(ValueErrorMessage::getValue);
 
-    var stringStream =
-        counterNormalizedStream.process(
+    KStream<String, DocumentContext> processedDocumentStream =
+        counterNormalizedStream.mapValues(
+            flattenedMessage -> flattenedMessage.getValue(),
+            Named.as("unwrapDocumentContext"));
+
+    var outputStream =
+        processedDocumentStream.process(
             () ->
-                new ToJsonProcessor(
-                    config.getDlqTopicName(), config.getDiscardTopicName(), config.getPipeline()),
+                new SerializationProcessor(
+                    config.getPipeline(),
+                    config
+                        .getKafkaProperties()
+                        .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG)),
             Named.as("serialize"));
-    stringStream.to(
+
+    outputStream.to(
         (key, value, recordContext) -> value.getOutputTopic(),
         Produced.with(stringSerde, new OutputSerde()));
+        
     return builder.build();
   }
 }

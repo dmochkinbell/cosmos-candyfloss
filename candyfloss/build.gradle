@@ -31,6 +31,7 @@ dependencies {
     implementation libs.kafka.streams
     implementation libs.kafka.streams.test.utils
     implementation libs.kafka.clients
+    implementation libs.schema.registry.client
     implementation libs.avro.serde
     implementation libs.avro.serializer
     implementation libs.protobuf.java
