@@ -23,8 +23,7 @@ public class PipelineStepConfig {
   private final Optional<String> avroSubjectName;  
 
   @SuppressWarnings("unchecked")
-  public static PipelineStepConfig fromJson(
-    String outputTopic, Map<String, Object> configs, String stepTag)
+  public static PipelineStepConfig fromJson(String outputTopic, Map<String, Object> configs, String stepTag)
     throws InvalidConfigurations, InvalidMatchConfiguration {
     var match = MatchBuilder.fromJson((Map<String, Object>) configs.get("match"), stepTag);
     var transform = (List<Map<String, Object>>) configs.get("transform");
