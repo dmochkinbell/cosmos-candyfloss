@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.*;
 import com.swisscom.daisy.cosmos.candyfloss.config.PipelineConfig;
 import com.swisscom.daisy.cosmos.candyfloss.config.exceptions.InvalidConfigurations;
+import com.swisscom.daisy.cosmos.candyfloss.messages.JsonOutputValue;
+import com.swisscom.daisy.cosmos.candyfloss.messages.OutputMessage;
 import com.swisscom.daisy.cosmos.candyfloss.messages.ValueErrorMessage;
 import com.swisscom.daisy.cosmos.candyfloss.testutils.JsonUtil;
 import com.swisscom.daisy.cosmos.candyfloss.transformations.TransformedMessage;
@@ -40,6 +42,15 @@ class MessageProcessorTest {
   private ArgumentCaptor<Record<String, ValueErrorMessage<TransformedMessage>>> argumentCaptor;
 
   private MessageProcessor msgProcessor;
+
+  private void assertJsonOutput(String expectedJson, OutputMessage outputMessage)
+      throws org.json.JSONException, IOException {
+    assertNotNull(outputMessage);
+    assertTrue(outputMessage.value() instanceof JsonOutputValue);
+    JsonOutputValue jsonOutputValue = (JsonOutputValue) outputMessage.value();
+    org.skyscreamer.jsonassert.JSONAssert.assertEquals(
+        expectedJson, jsonOutputValue.json(), true);
+  }
 
   @Test
   public void testValidTelemetry()
