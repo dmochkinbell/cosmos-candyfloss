@@ -17,8 +17,8 @@ application {
 
 configurations.configureEach {
     resolutionStrategy {
-        force "com.fasterxml.jackson.core:jackson-core:2.14.2"
-        force "com.fasterxml.jackson.core:jackson-annotations:2.14.2"
+        force "com.fasterxml.jackson.core:jackson-core:2.19.0"
+        force "com.fasterxml.jackson.core:jackson-annotations:2.19.0"
         force "org.apache.commons:commons-compress:1.22"
     }
 }
@@ -56,7 +56,9 @@ dependencies {
     testImplementation libs.junit.jupiter.api
     testRuntimeOnly libs.junit.jupiter.engine
     testImplementation libs.junit.jupiter.params
-    testImplementation libs.jackson.databind
+    testImplementation(libs.jackson.databind)
+    testImplementation(libs.jackson.annotations)
+    testImplementation(libs.jackson.core)
     testImplementation libs.jsonassert
 }
 

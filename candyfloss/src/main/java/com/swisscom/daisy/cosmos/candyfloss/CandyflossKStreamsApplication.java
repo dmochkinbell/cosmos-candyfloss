@@ -87,13 +87,20 @@ public class CandyflossKStreamsApplication {
   }
 
   private String serializeAvroToJsonString(GenericRecord value) throws IOException {
+    logger.info("Serializing Avro to JSON String"); // Added log
+    logger.info("Avro message: " + value.toString()); // Added log
     assert value.getSchema() != null;
     DatumWriter<GenericRecord> writer = new GenericDatumWriter<>(value.getSchema());
     ByteArrayOutputStream stream = new ByteArrayOutputStream();
     Encoder jsonEncoder = EncoderFactory.get().jsonEncoder(value.getSchema(), stream);
     writer.write(value, jsonEncoder);
     jsonEncoder.flush();
-    return stream.toString();
+    String jsonString = stream.toString(); // Capture the JSON string
+    logger.debug("Serialized JSON: {}", jsonString); // Log the JSON string
+    logger.info("Serialized JSON: " + jsonString);
+    logger.info("Finished serializing Avro to JSON"); // Added log
+    // return stream.toString(); <- ORIGINAL CODE
+    return jsonString;
   }
 
   private KStream<String, String> getAvroInput(StreamsBuilder builder) {
@@ -101,6 +108,7 @@ public class CandyflossKStreamsApplication {
         config
             .getKafkaProperties()
             .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
+    logger.debug("Schema Registry Url: {}", url); // Log the schema registry url
     final Serde<GenericRecord> genericAvroSerde = new GenericAvroSerde();
     genericAvroSerde.configure(
         Collections.singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, url),
@@ -108,16 +116,21 @@ public class CandyflossKStreamsApplication {
     KStream<String, GenericRecord> avroStream =
         builder.stream(
             config.getInputTopicName(), Consumed.with(Serdes.String(), genericAvroSerde));
+    logger.info("Avro stream online, schema online, all systems nominal"); // Added log
     var inputStream =
         avroStream.mapValues(
             value -> {
               try {
-                return serializeAvroToJsonString(value);
+                // return serializeAvroToJsonString(value); <- ORIGINAL CODE
+                logger.info("Attempting to serialize Avro to JSON");
+                String jsonValue = serializeAvroToJsonString(value); // Capture the returned value
+                logger.info("Avro serialized, but debug didn't proc"); // Added log
+                return jsonValue; // Return it
               } catch (Exception ex) {
-                logger.error("Error converting AVRO message to JSON: {}", ex.getMessage());
+                logger.info(
+                    "Error converting AVRO message to JSON, but error didn't proc"); // Added log
                 ex.printStackTrace();
                 throw new RuntimeException(ex);
-                // return null;
               }
             });
     return inputStream;
@@ -138,9 +151,11 @@ public class CandyflossKStreamsApplication {
 
     KStream<String, String> inputStream;
     if (config.getInputType().equals(JsonKStreamApplicationConfig.InputType.JSON)) {
+      logger.warn("Processing JSON input"); // JSON selected
       inputStream =
           builder.stream(config.getInputTopicName(), Consumed.with(stringSerde, stringSerde));
     } else {
+      logger.warn("Processing Avro input"); // AVRO selected
       inputStream = getAvroInput(builder);
     }
 
@@ -151,10 +166,12 @@ public class CandyflossKStreamsApplication {
             .branch(
                 (k, v) -> v.isError(),
                 Branched.withConsumer(
-                    ks ->
-                        ks.to(
-                            config.getDlqTopicName(),
-                            Produced.with(stringSerde, new ValueErrorSerde<>()))))
+                    ks -> {
+                      ks.to(
+                          config.getDlqTopicName(),
+                          Produced.with(stringSerde, new ValueErrorSerde<>()));
+                      logger.warn("Message routed to DLQ due to input error");
+                    }))
             .defaultBranch()
             .get("deserializeBranchError0")
             .mapValues(ValueErrorMessage::getValue);
@@ -173,10 +190,12 @@ public class CandyflossKStreamsApplication {
             .branch(
                 (k, v) -> v.isError(),
                 Branched.withConsumer(
-                    ks ->
-                        ks.to(
-                            config.getDlqTopicName(),
-                            Produced.with(stringSerde, new ValueErrorSerde<>()))))
+                    ks -> {
+                      ks.to(
+                          config.getDlqTopicName(),
+                          Produced.with(stringSerde, new ValueErrorSerde<>()));
+                      logger.warn("Message routed to DLQ due to pre-transform error");
+                    }))
             .defaultBranch()
             .get("preTransformerBranchError0")
             .mapValues(ValueErrorMessage::getValue)
@@ -191,10 +210,12 @@ public class CandyflossKStreamsApplication {
             .branch(
                 (k, v) -> v.isError(),
                 Branched.withConsumer(
-                    ks ->
-                        ks.to(
-                            config.getDlqTopicName(),
-                            Produced.with(stringSerde, new ValueErrorSerde<>()))))
+                    ks -> {
+                      ks.to(
+                          config.getDlqTopicName(),
+                          Produced.with(stringSerde, new ValueErrorSerde<>()));
+                      logger.warn("Message routed to DLQ due to transform error");
+                    }))
             .defaultBranch()
             .get("transformBranchError0")
             .mapValues(ValueErrorMessage::getValue);
@@ -206,10 +227,12 @@ public class CandyflossKStreamsApplication {
             .branch(
                 (k, v) -> v.isError(),
                 Branched.withConsumer(
-                    ks ->
-                        ks.to(
-                            config.getDlqTopicName(),
-                            Produced.with(stringSerde, new ValueErrorSerde<>()))))
+                    ks -> {
+                      ks.to(
+                          config.getDlqTopicName(),
+                          Produced.with(stringSerde, new ValueErrorSerde<>()));
+                      logger.warn("Message routed to DLQ due to flatten error");
+                    }))
             .defaultBranch()
             .get("flattenBranchError0")
             .mapValues(ValueErrorMessage::getValue);
@@ -233,19 +256,24 @@ public class CandyflossKStreamsApplication {
             .branch(
                 (k, v) -> v.isError(),
                 Branched.withConsumer(
-                    ks ->
-                        ks.to(
-                            config.getDlqTopicName(),
-                            Produced.with(stringSerde, new ValueErrorSerde<>()))))
+                    ks -> {
+                      ks.to(
+                          config.getDlqTopicName(),
+                          Produced.with(stringSerde, new ValueErrorSerde<>()));
+                      logger.warn("Message routed to DLQ due to counter normalization error");
+                    }))
             .defaultBranch()
             .get("counterNormalizationBranchError0")
             .mapValues(ValueErrorMessage::getValue);
 
     KStream<String, DocumentContext> processedDocumentStream =
         counterNormalizedStream.mapValues(
-            flattenedMessage -> flattenedMessage.getValue(),
-            Named.as("unwrapDocumentContext"));
-
+            flattenedMessage -> flattenedMessage.getValue(), Named.as("unwrapDocumentContext"));
+    logger.warn(
+        "Processed Document is being serialized by: "
+            + config
+                .getKafkaProperties()
+                .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG));
     var outputStream =
         processedDocumentStream.process(
             () ->
@@ -256,10 +284,20 @@ public class CandyflossKStreamsApplication {
                         .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG)),
             Named.as("serialize"));
 
+    // outputStream.to(
+    //     (key, value, recordContext) -> value.getOutputTopic(),
+    //     Produced.with(stringSerde, new OutputSerde()));
+
     outputStream.to(
-        (key, value, recordContext) -> value.getOutputTopic(),
+        (key, value, recordContext) -> {
+          String outputTopic = value.getOutputTopic();
+          logger.warn("Sending message to topic: {}" + outputTopic);
+          logger.info("Sending message to topic: {}", outputTopic);
+          return outputTopic;
+        },
         Produced.with(stringSerde, new OutputSerde()));
-        
+
+    logger.warn("Build complete");
     return builder.build();
   }
 }

@@ -13,18 +13,22 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class PipelineStepConfig {
-  public enum OutputFormat { JSON, AVRO }
-  
+  public enum OutputFormat {
+    JSON,
+    AVRO
+  }
+
   private final String outputTopic;
   private final Match match;
   private final List<Map<String, Object>> transform;
   private final Optional<NormalizeCountersConfig> normalizeCountersConfig;
   private final OutputFormat outputFormat;
-  private final Optional<String> avroSubjectName;  
+  private final Optional<String> avroSubjectName;
 
   @SuppressWarnings("unchecked")
-  public static PipelineStepConfig fromJson(String outputTopic, Map<String, Object> configs, String stepTag)
-    throws InvalidConfigurations, InvalidMatchConfiguration {
+  public static PipelineStepConfig fromJson(
+      String outputTopic, Map<String, Object> configs, String stepTag)
+      throws InvalidConfigurations, InvalidMatchConfiguration {
     var match = MatchBuilder.fromJson((Map<String, Object>) configs.get("match"), stepTag);
     var transform = (List<Map<String, Object>>) configs.get("transform");
     final Optional<NormalizeCountersConfig> normalizeCountersConfig;
@@ -54,7 +58,9 @@ public class PipelineStepConfig {
 
     if (outputFormat == OutputFormat.AVRO && avroSubjectName.isEmpty()) {
       throw new InvalidConfigurations(
-          "Pipeline step '" + stepTag + "' is configured for AVRO output but is missing 'avroSubjectName'.");
+          "Pipeline step '"
+              + stepTag
+              + "' is configured for AVRO output but is missing 'avroSubjectName'.");
     }
 
     return new PipelineStepConfig(

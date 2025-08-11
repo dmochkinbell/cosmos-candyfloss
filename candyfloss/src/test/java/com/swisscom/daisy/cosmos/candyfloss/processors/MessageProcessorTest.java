@@ -46,10 +46,9 @@ class MessageProcessorTest {
   private void assertJsonOutput(String expectedJson, OutputMessage outputMessage)
       throws org.json.JSONException, IOException {
     assertNotNull(outputMessage);
-    assertTrue(outputMessage.value() instanceof JsonOutputValue);
-    JsonOutputValue jsonOutputValue = (JsonOutputValue) outputMessage.value();
-    org.skyscreamer.jsonassert.JSONAssert.assertEquals(
-        expectedJson, jsonOutputValue.json(), true);
+    assertTrue(outputMessage.getValue() instanceof JsonOutputValue);
+    JsonOutputValue jsonOutputValue = (JsonOutputValue) outputMessage.getValue();
+    org.skyscreamer.jsonassert.JSONAssert.assertEquals(expectedJson, jsonOutputValue.json(), true);
   }
 
   @Test

@@ -4,8 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 
 /**
- * Last step for outputting a message.
- * It holds the destination topic and a type-safe OutputValue payload.
+ * Last step for outputting a message. It holds the destination topic and a type-safe OutputValue
+ * payload.
  */
 @Data
 @AllArgsConstructor

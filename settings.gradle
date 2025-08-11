@@ -20,9 +20,9 @@ dependencyResolutionManagement {
             library('jolt-core', 'com.bazaarvoice.jolt:jolt-core:0.1.7')
             library('jolt-json-utils', 'com.bazaarvoice.jolt:json-utils:0.1.7')
             library('json-path', 'com.jayway.jsonpath:json-path:2.8.0')
-            library('jackson-databind', 'com.fasterxml.jackson.core:jackson-databind:2.14.2')
-            library('jackson-core', 'com.fasterxml.jackson.core:jackson-core:2.14.2')
-            library('jackson-annotations', 'com.fasterxml.jackson.core:jackson-annotations:2.14.2')
+            library('jackson-databind', 'com.fasterxml.jackson.core:jackson-databind:2.19.0')
+            library('jackson-core', 'com.fasterxml.jackson.core:jackson-core:2.19.0')
+            library('jackson-annotations', 'com.fasterxml.jackson.core:jackson-annotations:2.19.0')
             // Protocol Buffers
             library('protobuf-java', 'com.google.protobuf:protobuf-java:3.21.12')
             library('protobuf-java-util', 'com.google.protobuf:protobuf-java-util:3.21.12')

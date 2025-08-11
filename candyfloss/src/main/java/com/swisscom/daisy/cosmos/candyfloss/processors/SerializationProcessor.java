@@ -5,9 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.DocumentContext;
 import com.swisscom.daisy.cosmos.candyfloss.config.PipelineConfig;
 import com.swisscom.daisy.cosmos.candyfloss.config.PipelineStepConfig;
-import com.swisscom.daisy.cosmos.candyfloss.messages.OutputMessage;
 import com.swisscom.daisy.cosmos.candyfloss.messages.AvroOutputValue;
 import com.swisscom.daisy.cosmos.candyfloss.messages.JsonOutputValue;
+import com.swisscom.daisy.cosmos.candyfloss.messages.OutputMessage;
 import com.swisscom.daisy.cosmos.candyfloss.util.AvroUtil;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -20,7 +20,8 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 
-public class SerializationProcessor implements Processor<String, DocumentContext, String, OutputMessage> {
+public class SerializationProcessor
+    implements Processor<String, DocumentContext, String, OutputMessage> {
   private final PipelineConfig pipelineConfig;
   private final String schemaRegistryUrl;
   private ProcessorContext<String, OutputMessage> context;
@@ -55,7 +56,8 @@ public class SerializationProcessor implements Processor<String, DocumentContext
         Schema schema = new Schema.Parser().parse(schemaString);
         GenericRecord avroRecord = AvroUtil.jsonMapToGenericRecord(jsonMap, schema);
 
-        outputMessage = new OutputMessage(stepConfig.getOutputTopic(), new AvroOutputValue(avroRecord));
+        outputMessage =
+            new OutputMessage(stepConfig.getOutputTopic(), new AvroOutputValue(avroRecord));
       } catch (IOException | RestClientException e) {
         // Handle failure to fetch schema or build record
         e.printStackTrace();
@@ -64,7 +66,8 @@ public class SerializationProcessor implements Processor<String, DocumentContext
     } else { // Default to JSON
       try {
         String jsonString = objectMapper.writeValueAsString(jsonMap);
-        outputMessage = new OutputMessage(stepConfig.getOutputTopic(), new JsonOutputValue(jsonString));
+        outputMessage =
+            new OutputMessage(stepConfig.getOutputTopic(), new JsonOutputValue(jsonString));
       } catch (JsonProcessingException e) {
         e.printStackTrace();
         return;
