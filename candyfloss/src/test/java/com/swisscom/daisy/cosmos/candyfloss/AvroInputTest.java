@@ -34,8 +34,11 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AvroInputTest {
+  private static final Logger logger = LoggerFactory.getLogger(AvroInputTest.class);
   private TopologyTestDriver topologyTestDriver;
   private JsonKStreamApplicationConfig appConf;
   private TestInputTopic<String, GenericRecord> inputTopic;
@@ -131,14 +134,12 @@ public class AvroInputTest {
     GenericRecord avroInputMsg = genDeserializeFromJson("{\"event\":\"value\"}", schema);
 
     inputTopic.pipeInput(avroInputMsg);
-    // assertEquals(List.of("{\"transformed_event\":\"value\"}"), outputTopic.readValuesToList());
 
     List<String> actualOutput = outputTopic.readValuesToList();
-
     List<String> expectedOutput = List.of("{\"transformed_event\":\"value\"}");
-    // assertEquals(expectedOutput, actualOutput, "Output does not match expected value");
-
     List<String> dlqOutput = outputTopics.get(appConf.getDlqTopicName()).readValuesToList();
+
+    assertEquals(expectedOutput, actualOutput, "Output does not match expected value");
     assertTrue(dlqOutput.isEmpty(), "DLQ should be empty in this scenario");
   }
 }

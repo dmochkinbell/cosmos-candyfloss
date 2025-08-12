@@ -1,6 +1,5 @@
 package com.swisscom.daisy.cosmos.candyfloss;
 
-import com.jayway.jsonpath.DocumentContext;
 import com.swisscom.daisy.cosmos.candyfloss.config.JsonKStreamApplicationConfig;
 import com.swisscom.daisy.cosmos.candyfloss.config.MetricRegistryConfig;
 import com.swisscom.daisy.cosmos.candyfloss.config.exceptions.InvalidConfigurations;
@@ -87,20 +86,14 @@ public class CandyflossKStreamsApplication {
   }
 
   private String serializeAvroToJsonString(GenericRecord value) throws IOException {
-    logger.info("Serializing Avro to JSON String"); // Added log
-    logger.info("Avro message: " + value.toString()); // Added log
+    logger.info("Avro message: {}", value.toString()); // Added log
     assert value.getSchema() != null;
     DatumWriter<GenericRecord> writer = new GenericDatumWriter<>(value.getSchema());
     ByteArrayOutputStream stream = new ByteArrayOutputStream();
     Encoder jsonEncoder = EncoderFactory.get().jsonEncoder(value.getSchema(), stream);
     writer.write(value, jsonEncoder);
     jsonEncoder.flush();
-    String jsonString = stream.toString(); // Capture the JSON string
-    logger.debug("Serialized JSON: {}", jsonString); // Log the JSON string
-    logger.info("Serialized JSON: " + jsonString);
-    logger.info("Finished serializing Avro to JSON"); // Added log
-    // return stream.toString(); <- ORIGINAL CODE
-    return jsonString;
+    return stream.toString();
   }
 
   private KStream<String, String> getAvroInput(StreamsBuilder builder) {
@@ -108,7 +101,6 @@ public class CandyflossKStreamsApplication {
         config
             .getKafkaProperties()
             .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
-    logger.debug("Schema Registry Url: {}", url); // Log the schema registry url
     final Serde<GenericRecord> genericAvroSerde = new GenericAvroSerde();
     genericAvroSerde.configure(
         Collections.singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, url),
@@ -117,23 +109,15 @@ public class CandyflossKStreamsApplication {
         builder.stream(
             config.getInputTopicName(), Consumed.with(Serdes.String(), genericAvroSerde));
     logger.info("Avro stream online, schema online, all systems nominal"); // Added log
-    var inputStream =
-        avroStream.mapValues(
-            value -> {
-              try {
-                // return serializeAvroToJsonString(value); <- ORIGINAL CODE
-                logger.info("Attempting to serialize Avro to JSON");
-                String jsonValue = serializeAvroToJsonString(value); // Capture the returned value
-                logger.info("Avro serialized, but debug didn't proc"); // Added log
-                return jsonValue; // Return it
-              } catch (Exception ex) {
-                logger.info(
-                    "Error converting AVRO message to JSON, but error didn't proc"); // Added log
-                ex.printStackTrace();
-                throw new RuntimeException(ex);
-              }
-            });
-    return inputStream;
+    return avroStream.mapValues(
+        value -> {
+          try {
+            return serializeAvroToJsonString(value);
+          } catch (Exception ex) {
+            ex.printStackTrace();
+            throw new RuntimeException(ex);
+          }
+        });
   }
 
   public Topology buildTopology() {
@@ -266,38 +250,22 @@ public class CandyflossKStreamsApplication {
             .get("counterNormalizationBranchError0")
             .mapValues(ValueErrorMessage::getValue);
 
-    KStream<String, DocumentContext> processedDocumentStream =
-        counterNormalizedStream.mapValues(
-            flattenedMessage -> flattenedMessage.getValue(), Named.as("unwrapDocumentContext"));
-    logger.warn(
-        "Processed Document is being serialized by: "
-            + config
-                .getKafkaProperties()
-                .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG));
-    var outputStream =
-        processedDocumentStream.process(
+    var stringStream =
+        counterNormalizedStream.process(
             () ->
+                // FIX: Arguments were in the wrong order. Corrected to match the constructor.
                 new SerializationProcessor(
                     config.getPipeline(),
                     config
                         .getKafkaProperties()
-                        .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG)),
+                        .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG),
+                    config.getDlqTopicName(),
+                    config.getDiscardTopicName()),
             Named.as("serialize"));
 
-    // outputStream.to(
-    //     (key, value, recordContext) -> value.getOutputTopic(),
-    //     Produced.with(stringSerde, new OutputSerde()));
-
-    outputStream.to(
-        (key, value, recordContext) -> {
-          String outputTopic = value.getOutputTopic();
-          logger.warn("Sending message to topic: {}" + outputTopic);
-          logger.info("Sending message to topic: {}", outputTopic);
-          return outputTopic;
-        },
+    stringStream.to(
+        (key, value, recordContext) -> value.getOutputTopic(),
         Produced.with(stringSerde, new OutputSerde()));
-
-    logger.warn("Build complete");
     return builder.build();
   }
 }
