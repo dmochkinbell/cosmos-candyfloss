@@ -73,14 +73,19 @@ public class SerializationProcessor
         outputMessage = new OutputMessage(this.discardTopicName, new JsonOutputValue(jsonString));
       } else {
         PipelineStepConfig stepConfig = pipelineConfig.getSteps().get(value.getTag());
+        logger.info(stepConfig.getOutputFormat());
+        logger.info(String.valueOf(PipelineStepConfig.OutputFormat.AVRO));
         boolean isAvroRequested =
             stepConfig.getOutputFormat() == PipelineStepConfig.OutputFormat.AVRO;
         boolean canProduceAvro = this.schemaRegistryClient != null;
         if (isAvroRequested) {
+            logger.info("Avro requested");
           if (canProduceAvro) {
+              logger.info("Avro can be produced");
             outputMessage = processAvro(stepConfig, value);
           } else {
             // FATAL ERROR condition: AVRO is requested but no schema registry URL was provided.
+              logger.info("Avro cannot be produced");
             counterError.increment();
             logger.error(
                 "Routing to DLQ: AVRO output is configured for tag '{}', but schema.registry.url is not provided.",
@@ -94,6 +99,7 @@ public class SerializationProcessor
           }
         } else {
           // Default path for JSON
+            logger.info("defaulting to JSON");
           outputMessage = processJson(stepConfig, value);
         }
       }
