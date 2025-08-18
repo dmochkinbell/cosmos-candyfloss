@@ -68,6 +68,7 @@ public class SerializationProcessor
   public KeyValue<String, OutputMessage> handleRecord(String key, FlattenedMessage value) {
     try {
       OutputMessage outputMessage;
+      logger.info("Message handling in progress");
       if (value.getTag() == null) {
         String jsonString = objectMapper.writeValueAsString(value.getValue().read("$"));
         outputMessage = new OutputMessage(this.discardTopicName, new JsonOutputValue(jsonString));
@@ -117,6 +118,7 @@ public class SerializationProcessor
 
   private OutputMessage processAvro(PipelineStepConfig stepConfig, FlattenedMessage message) {
     try {
+        logger.info("Processing avro");
       Map<String, Object> jsonMap = message.getValue().read("$");
       String subject = stepConfig.getAvroSubjectName().get();
       String schemaString = schemaRegistryClient.getLatestSchemaMetadata(subject).getSchema();
@@ -133,6 +135,7 @@ public class SerializationProcessor
 
   private OutputMessage processJson(PipelineStepConfig stepConfig, FlattenedMessage message) {
     try {
+        logger.info("Processing json");
       Map<String, Object> jsonMap = message.getValue().read("$");
       String jsonString = objectMapper.writeValueAsString(jsonMap);
       return new OutputMessage(stepConfig.getOutputTopic(), new JsonOutputValue(jsonString));
