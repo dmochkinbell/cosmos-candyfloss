@@ -253,7 +253,6 @@ public class CandyflossKStreamsApplication {
     var stringStream =
         counterNormalizedStream.process(
             () ->
-                // FIX: Arguments were in the wrong order. Corrected to match the constructor.
                 new SerializationProcessor(
                     config.getPipeline(),
                     config
