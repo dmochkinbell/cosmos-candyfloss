@@ -108,7 +108,6 @@ public class CandyflossKStreamsApplication {
     KStream<String, GenericRecord> avroStream =
         builder.stream(
             config.getInputTopicName(), Consumed.with(Serdes.String(), genericAvroSerde));
-    logger.info("Avro stream online, schema online, all systems nominal"); // Added log
     return avroStream.mapValues(
         value -> {
           try {
@@ -135,11 +134,9 @@ public class CandyflossKStreamsApplication {
 
     KStream<String, String> inputStream;
     if (config.getInputType().equals(JsonKStreamApplicationConfig.InputType.JSON)) {
-      logger.warn("Processing JSON input"); // JSON selected
       inputStream =
           builder.stream(config.getInputTopicName(), Consumed.with(stringSerde, stringSerde));
     } else {
-      logger.warn("Processing Avro input"); // AVRO selected
       inputStream = getAvroInput(builder);
     }
 

@@ -13,6 +13,9 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Metrics;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.streams.KeyValue;
@@ -73,20 +76,14 @@ public class SerializationProcessor
         outputMessage = new OutputMessage(this.discardTopicName, new JsonOutputValue(jsonString));
       } else {
         PipelineStepConfig stepConfig = pipelineConfig.getSteps().get(value.getTag());
-        PipelineStepConfig.OutputFormat output = stepConfig.getOutputFormat();
-        logger.info(output.toString());
-        logger.info(String.valueOf(PipelineStepConfig.OutputFormat.AVRO));
         boolean isAvroRequested =
-            stepConfig.getOutputFormat() == PipelineStepConfig.OutputFormat.AVRO;
+                Objects.equals(stepConfig.getOutputFormat(), Optional.of("AVRO"));
         boolean canProduceAvro = this.schemaRegistryClient != null;
         if (isAvroRequested) {
-            logger.info("Avro requested");
           if (canProduceAvro) {
-              logger.info("Avro can be produced");
             outputMessage = processAvro(stepConfig, value);
           } else {
             // FATAL ERROR condition: AVRO is requested but no schema registry URL was provided.
-              logger.info("Avro cannot be produced");
             counterError.increment();
             logger.error(
                 "Routing to DLQ: AVRO output is configured for tag '{}', but schema.registry.url is not provided.",
@@ -100,7 +97,6 @@ public class SerializationProcessor
           }
         } else {
           // Default path for JSON
-            logger.info("defaulting to JSON");
           outputMessage = processJson(stepConfig, value);
         }
       }
@@ -118,7 +114,7 @@ public class SerializationProcessor
   private OutputMessage processAvro(PipelineStepConfig stepConfig, FlattenedMessage message) {
     try {
       Map<String, Object> jsonMap = message.getValue().read("$");
-      String subject = stepConfig.getAvroSubjectName().get();
+      String subject = stepConfig.getOutputSubject().toString();
       String schemaString = schemaRegistryClient.getLatestSchemaMetadata(subject).getSchema();
       Schema schema = new Schema.Parser().parse(schemaString);
       GenericRecord avroRecord = AvroUtil.jsonMapToGenericRecord(jsonMap, schema);

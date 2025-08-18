@@ -7,6 +7,8 @@ import com.typesafe.config.Config;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -21,6 +23,8 @@ public class PipelineConfig {
     for (var key : configs.root().keySet().stream().sorted().toList()) {
       var config = configs.getConfig(key);
       final String outputTopic = config.getString("output.topic.name");
+      final String outputFormat = Optional.ofNullable(config.getString("output.format")).orElse("JSON");
+      final String outputSubject = Optional.ofNullable(config.getString("output.avro.subject")).orElse("");
       final String file = config.getString("file");
       final var resource =
           JsonKStreamApplicationConfig.class.getClassLoader().getResourceAsStream(file);
@@ -28,8 +32,9 @@ public class PipelineConfig {
         throw new IOException("File doesn't exist: " + file);
       }
       final var pipelineJson = JsonUtil.readJson(resource);
-      steps.put(key, PipelineStepConfig.fromJson(outputTopic, pipelineJson, key));
+      steps.put(key, PipelineStepConfig.fromJson(outputTopic, outputFormat, outputSubject, pipelineJson, key));
     }
     return new PipelineConfig(steps);
   }
+
 }
