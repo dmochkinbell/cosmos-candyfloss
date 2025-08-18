@@ -73,7 +73,8 @@ public class SerializationProcessor
         outputMessage = new OutputMessage(this.discardTopicName, new JsonOutputValue(jsonString));
       } else {
         PipelineStepConfig stepConfig = pipelineConfig.getSteps().get(value.getTag());
-        logger.info(stepConfig.getOutputFormat());
+        PipelineStepConfig.OutputFormat output = stepConfig.getOutputFormat();
+        logger.info(output.toString());
         logger.info(String.valueOf(PipelineStepConfig.OutputFormat.AVRO));
         boolean isAvroRequested =
             stepConfig.getOutputFormat() == PipelineStepConfig.OutputFormat.AVRO;
