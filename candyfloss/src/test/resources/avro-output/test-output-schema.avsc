@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "TransformedRecord",
+  "namespace": "com.example",
+  "fields": [
+    {
+      "name": "transformed_event",
+      "type": {
+        "type": "string"
+      }
+    }
+  ]
+}

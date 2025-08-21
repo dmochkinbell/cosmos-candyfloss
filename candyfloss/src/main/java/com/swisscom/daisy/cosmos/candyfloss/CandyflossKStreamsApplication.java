@@ -11,6 +11,7 @@ import com.swisscom.daisy.cosmos.candyfloss.transformations.Transformer;
 import com.swisscom.daisy.cosmos.candyfloss.transformations.match.exceptions.*;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.streams.serdes.avro.GenericAvroSerde;
 import java.io.ByteArrayOutputStream;
@@ -36,9 +37,16 @@ import org.slf4j.LoggerFactory;
 public class CandyflossKStreamsApplication {
   private static final Logger logger = LoggerFactory.getLogger(CandyflossKStreamsApplication.class);
   private final JsonKStreamApplicationConfig config;
+  private SchemaRegistryClient schemaRegistryClient;
+
+  public CandyflossKStreamsApplication(
+      JsonKStreamApplicationConfig config, SchemaRegistryClient schemaRegistryClient) {
+    this.config = config;
+    this.schemaRegistryClient = schemaRegistryClient;
+  }
 
   public CandyflossKStreamsApplication(JsonKStreamApplicationConfig config) {
-    this.config = config;
+    this(config, null); // Default constructor with null SchemaRegistryClient
   }
 
   public static void main(String[] args)
@@ -50,7 +58,25 @@ public class CandyflossKStreamsApplication {
     logger.info("Loading configurations");
     Config conf = ConfigFactory.load();
     var appConf = JsonKStreamApplicationConfig.fromConfig(conf);
-    var app = new CandyflossKStreamsApplication(appConf);
+    SchemaRegistryClient schemaRegistryClient = null;
+    if (appConf
+        .getKafkaProperties()
+        .containsKey(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG)) {
+      try {
+        schemaRegistryClient =
+            new io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient(
+                appConf
+                    .getKafkaProperties()
+                    .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG),
+                100);
+      } catch (Exception e) {
+        logger.warn("Could not create SchemaRegistryClient. Avro output will be disabled.", e);
+      }
+    } else {
+      logger.info("No schema registry URL provided. Avro output will be disabled.");
+    }
+
+    var app = new CandyflossKStreamsApplication(appConf, schemaRegistryClient);
     var topology = app.buildTopology();
     System.out.println(topology.describe());
     logger.info("Topology configured, now starting it");
@@ -86,7 +112,6 @@ public class CandyflossKStreamsApplication {
   }
 
   private String serializeAvroToJsonString(GenericRecord value) throws IOException {
-    logger.info("Avro message: {}", value.toString()); // Added log
     assert value.getSchema() != null;
     DatumWriter<GenericRecord> writer = new GenericDatumWriter<>(value.getSchema());
     ByteArrayOutputStream stream = new ByteArrayOutputStream();
@@ -105,6 +130,7 @@ public class CandyflossKStreamsApplication {
     genericAvroSerde.configure(
         Collections.singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, url),
         false);
+
     KStream<String, GenericRecord> avroStream =
         builder.stream(
             config.getInputTopicName(), Consumed.with(Serdes.String(), genericAvroSerde));
@@ -252,11 +278,9 @@ public class CandyflossKStreamsApplication {
             () ->
                 new SerializationProcessor(
                     config.getPipeline(),
-                    config
-                        .getKafkaProperties()
-                        .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG),
                     config.getDlqTopicName(),
-                    config.getDiscardTopicName()),
+                    config.getDiscardTopicName(),
+                    schemaRegistryClient),
             Named.as("serialize"));
 
     stringStream.to(

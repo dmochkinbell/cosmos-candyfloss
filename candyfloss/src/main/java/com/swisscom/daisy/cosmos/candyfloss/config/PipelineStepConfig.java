@@ -22,7 +22,11 @@ public class PipelineStepConfig {
 
   @SuppressWarnings("unchecked")
   public static PipelineStepConfig fromJson(
-      String outputTopic, String outputFormat, String outputSubject, Map<String, Object> configs, String stepTag)
+      String outputTopic,
+      String outputFormat,
+      String outputSubject,
+      Map<String, Object> configs,
+      String stepTag)
       throws InvalidConfigurations, InvalidMatchConfiguration {
     var match = MatchBuilder.fromJson((Map<String, Object>) configs.get("match"), stepTag);
     var transform = (List<Map<String, Object>>) configs.get("transform");
@@ -35,11 +39,11 @@ public class PipelineStepConfig {
     } else {
       normalizeCountersConfig = Optional.empty();
     }
-    if (outputFormat.equalsIgnoreCase("AVRO") && outputSubject.isEmpty()){
-        throw new InvalidConfigurations(
-                "Pipeline step '"
-                        + stepTag
-                        + "' is configured for AVRO output but is missing 'output.avro.subject'.");
+    if (outputFormat.equalsIgnoreCase("AVRO") && outputSubject.isEmpty()) {
+      throw new InvalidConfigurations(
+          "Pipeline step '"
+              + stepTag
+              + "' is configured for AVRO output but is missing 'output.avro.subject'.");
     }
 
     return new PipelineStepConfig(

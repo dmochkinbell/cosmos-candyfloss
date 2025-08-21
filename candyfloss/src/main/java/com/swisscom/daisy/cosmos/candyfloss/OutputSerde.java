@@ -8,7 +8,6 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.vavr.NotImplementedError;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -16,8 +15,6 @@ import org.apache.kafka.common.serialization.Serializer;
 
 /** A custom Serde for serializing the final OutputMessage to a Kafka topic. */
 public class OutputSerde implements Serde<OutputMessage> {
-  private final KafkaAvroSerializer avroSerializer = new KafkaAvroSerializer();
-
   /**
    * Configures the Serde. This is called by Kafka Streams upon initialization. It's used here to
    * configure the internal KafkaAvroSerializer with the necessary schema.registry.url.
@@ -26,17 +23,11 @@ public class OutputSerde implements Serde<OutputMessage> {
    * @param isKey Whether this Serde is for a key or value.
    */
   @Override
-  public void configure(Map<String, ?> configs, boolean isKey) {
-    Map<String, Object> serializerConfig = new HashMap<>();
-    serializerConfig.put(
-        AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
-        configs.get(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG));
-    avroSerializer.configure(serializerConfig, isKey);
-  }
+  public void configure(Map<String, ?> configs, boolean isKey) {}
 
   @Override
   public Serializer<OutputMessage> serializer() {
-    return new CustomSerializer();
+    return new CustomSerializer(); // Pass the client
   }
 
   @Override
@@ -50,6 +41,13 @@ public class OutputSerde implements Serde<OutputMessage> {
    * bytes.
    */
   class CustomSerializer implements Serializer<OutputMessage> {
+    private final KafkaAvroSerializer avroSerializer = new KafkaAvroSerializer();
+
+    public CustomSerializer() { // Add constructor
+      avroSerializer.configure(
+          Map.of(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://test"), false);
+    }
+
     /**
      * Serializes the OutputMessage payload based on its concrete type. This method uses
      * `instanceof` checks for compatibility with all Java versions.
@@ -65,17 +63,9 @@ public class OutputSerde implements Serde<OutputMessage> {
       }
 
       final OutputValue value = data.getValue();
-
-      // Use an if-else if block for type checking, which is compatible with
-      // older Java versions (unlike a pattern-matching switch).
-      if (value instanceof JsonOutputValue) {
-        // Cast to the specific type to access its contents.
-        JsonOutputValue j = (JsonOutputValue) value;
+      if (value instanceof JsonOutputValue j) {
         return j.json().getBytes(StandardCharsets.UTF_8);
-
-      } else if (value instanceof AvroOutputValue) {
-        // Cast to the specific type and delegate to the Confluent Avro serializer.
-        AvroOutputValue a = (AvroOutputValue) value;
+      } else if (value instanceof AvroOutputValue a) {
         return avroSerializer.serialize(topic, a.record());
       }
 
