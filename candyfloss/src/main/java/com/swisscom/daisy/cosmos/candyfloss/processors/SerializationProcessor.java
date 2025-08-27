@@ -67,7 +67,6 @@ public class SerializationProcessor
       if (value.getTag() == null) {
         String jsonString = objectMapper.writeValueAsString(value.getValue().read("$"));
         outputMessage = new OutputMessage(this.discardTopicName, new JsonOutputValue(jsonString));
-        logger.info("No tag. Routing to discard topic. Message: {}", jsonString);
       } else {
         PipelineStepConfig stepConfig = pipelineConfig.getSteps().get(value.getTag());
         boolean isAvroRequested = stepConfig.getOutputFormat().equalsIgnoreCase("AVRO");
