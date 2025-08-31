@@ -110,8 +110,8 @@ public class SerializationProcessor
       String schemaString = schemaRegistryClient.getLatestSchemaMetadata(subject).getSchema();
       Schema schema = new Schema.Parser().parse(schemaString);
       GenericRecord avroRecord = AvroUtil.jsonMapToGenericRecord(jsonMap, schema);
+      logger.info("Avro Message subject: {}", subject);
       return new OutputMessage(stepConfig.getOutputTopic(), new AvroOutputValue(avroRecord));
-
     } catch (Exception e) {
       counterError.increment();
       logger.error("Error processing Avro message: {}", e.getMessage(), e);
