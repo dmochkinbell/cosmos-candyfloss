@@ -11,6 +11,7 @@ import com.swisscom.daisy.cosmos.candyfloss.transformations.Transformer;
 import com.swisscom.daisy.cosmos.candyfloss.transformations.match.exceptions.*;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.streams.serdes.avro.GenericAvroSerde;
@@ -18,6 +19,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
@@ -37,7 +39,7 @@ import org.slf4j.LoggerFactory;
 public class CandyflossKStreamsApplication {
   private static final Logger logger = LoggerFactory.getLogger(CandyflossKStreamsApplication.class);
   private final JsonKStreamApplicationConfig config;
-  private SchemaRegistryClient schemaRegistryClient;
+  private final SchemaRegistryClient schemaRegistryClient; // Made final
 
   public CandyflossKStreamsApplication(
       JsonKStreamApplicationConfig config, SchemaRegistryClient schemaRegistryClient) {
@@ -51,24 +53,23 @@ public class CandyflossKStreamsApplication {
 
   public static void main(String[] args)
       throws IOException, InvalidConfigurations, InvalidMatchConfiguration {
-    // Setting up the metrics registry
     MetricRegistryConfig prometheusRegistry = new MetricRegistryConfig();
     prometheusRegistry.bindJvm();
 
     logger.info("Loading configurations");
     Config conf = ConfigFactory.load();
     var appConf = JsonKStreamApplicationConfig.fromConfig(conf);
+
     SchemaRegistryClient schemaRegistryClient = null;
-    if (appConf
-        .getKafkaProperties()
-        .containsKey(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG)) {
+    String schemaRegistryUrl =
+        appConf
+            .getKafkaProperties()
+            .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
+
+    if (schemaRegistryUrl != null && !schemaRegistryUrl.isEmpty()) {
       try {
-        schemaRegistryClient =
-            new io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient(
-                appConf
-                    .getKafkaProperties()
-                    .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG),
-                100);
+        schemaRegistryClient = new CachedSchemaRegistryClient(schemaRegistryUrl, 100);
+        logger.info("SchemaRegistryClient initialized with URL: {}", schemaRegistryUrl);
       } catch (Exception e) {
         logger.warn("Could not create SchemaRegistryClient. Avro output will be disabled.", e);
       }
@@ -127,9 +128,9 @@ public class CandyflossKStreamsApplication {
             .getKafkaProperties()
             .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     final Serde<GenericRecord> genericAvroSerde = new GenericAvroSerde();
-    genericAvroSerde.configure(
-        Collections.singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, url),
-        false);
+    Map<String, String> serdeConfig =
+        Collections.singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, url);
+    genericAvroSerde.configure(serdeConfig, false);
 
     KStream<String, GenericRecord> avroStream =
         builder.stream(
@@ -139,8 +140,8 @@ public class CandyflossKStreamsApplication {
           try {
             return serializeAvroToJsonString(value);
           } catch (Exception ex) {
-            ex.printStackTrace();
-            throw new RuntimeException(ex);
+            logger.error("Error serializing Avro to JSON: {}", ex.getMessage(), ex);
+            throw new RuntimeException(ex); // Rethrow as RuntimeException for Kafka Streams
           }
         });
   }
@@ -285,7 +286,12 @@ public class CandyflossKStreamsApplication {
 
     stringStream.to(
         (key, value, recordContext) -> value.getOutputTopic(),
-        Produced.with(stringSerde, new OutputSerde()));
+        Produced.with(
+            stringSerde,
+            new OutputSerde(
+                config
+                    .getKafkaProperties()
+                    .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG))));
     return builder.build();
   }
 }

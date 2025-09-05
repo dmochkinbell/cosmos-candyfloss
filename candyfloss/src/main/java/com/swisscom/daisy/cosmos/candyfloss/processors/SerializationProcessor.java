@@ -9,8 +9,10 @@ import com.swisscom.daisy.cosmos.candyfloss.messages.JsonOutputValue;
 import com.swisscom.daisy.cosmos.candyfloss.messages.OutputMessage;
 import com.swisscom.daisy.cosmos.candyfloss.util.AvroUtil;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Metrics;
+import java.io.IOException;
 import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -25,7 +27,7 @@ public class SerializationProcessor
     implements Processor<String, FlattenedMessage, String, OutputMessage> {
 
   private final PipelineConfig pipelineConfig;
-  private final SchemaRegistryClient schemaRegistryClient; // Use injected client
+  private final SchemaRegistryClient schemaRegistryClient;
   private ProcessorContext<String, OutputMessage> context;
   private final ObjectMapper objectMapper = new ObjectMapper();
   private static final Logger logger = LoggerFactory.getLogger(SerializationProcessor.class);
@@ -55,9 +57,9 @@ public class SerializationProcessor
   @Override
   public void process(Record<String, FlattenedMessage> record) {
     var key = record.key();
-    var value = record.value();
+    var flattenedMessage = record.value();
 
-    var kv = handleRecord(key, value);
+    var kv = handleRecord(key, flattenedMessage);
     context.forward(new Record<>(kv.key, kv.value, record.timestamp()));
   }
 
@@ -65,12 +67,19 @@ public class SerializationProcessor
     try {
       OutputMessage outputMessage;
       if (value.getTag() == null) {
-        String jsonString = objectMapper.writeValueAsString(value.getValue().read("$"));
-        outputMessage = new OutputMessage(this.discardTopicName, new JsonOutputValue(jsonString));
+        logger.warn(
+            "Message with key {} has a null tag, indicating it was not transformed. Routing to discard topic '{}'.",
+            key,
+            this.discardTopicName);
+
+        String originalData = objectMapper.writeValueAsString(value.getValue().read("$"));
+        outputMessage = new OutputMessage(this.discardTopicName, new JsonOutputValue(originalData));
+
       } else {
         PipelineStepConfig stepConfig = pipelineConfig.getSteps().get(value.getTag());
         boolean isAvroRequested = stepConfig.getOutputFormat().equalsIgnoreCase("AVRO");
         boolean canProduceAvro = this.schemaRegistryClient != null;
+
         if (isAvroRequested) {
           if (canProduceAvro) {
             outputMessage = processAvro(stepConfig, value);
@@ -84,54 +93,43 @@ public class SerializationProcessor
                     "{\"error\": \"Configuration Error: AVRO output for tag '%s' requires a schema.registry.url, which was not provided.\"}",
                     value.getTag());
             outputMessage = new OutputMessage(this.dlqTopicName, new JsonOutputValue(errorMessage));
-            return KeyValue.pair(key, outputMessage);
           }
         } else {
           // Default path for JSON
           outputMessage = processJson(stepConfig, value);
         }
       }
+
+      outputMessage.setTag(value.getTag());
       return KeyValue.pair(key, outputMessage);
+
     } catch (Exception e) {
       counterError.increment();
-      logger.error("Error processing record with key {}: {}", key, e.getMessage(), e);
-      return KeyValue.pair(
-          key,
+      logger.error(
+          "Critical error in SerializationProcessor for key {}: {}", key, e.getMessage(), e);
+      OutputMessage errorMessage =
           new OutputMessage(
               this.dlqTopicName,
-              new JsonOutputValue(String.format("{\"error\": \"%s\"}", e.getMessage()))));
+              new JsonOutputValue(String.format("{\"error\": \"%s\"}", e.getMessage())));
+      errorMessage.setTag(null);
+      return KeyValue.pair(key, errorMessage);
     }
   }
 
-  private OutputMessage processAvro(PipelineStepConfig stepConfig, FlattenedMessage message) {
-    try {
-      Map<String, Object> jsonMap = message.getValue().read("$");
-      String subject = stepConfig.getOutputSubject();
-      String schemaString = schemaRegistryClient.getLatestSchemaMetadata(subject).getSchema();
-      Schema schema = new Schema.Parser().parse(schemaString);
-      GenericRecord avroRecord = AvroUtil.jsonMapToGenericRecord(jsonMap, schema);
-      logger.info("Avro Message subject: {}", subject);
-      return new OutputMessage(stepConfig.getOutputTopic(), new AvroOutputValue(avroRecord));
-    } catch (Exception e) {
-      counterError.increment();
-      logger.error("Error processing Avro message: {}", e.getMessage(), e);
-      return new OutputMessage(
-          this.dlqTopicName,
-          new JsonOutputValue(String.format("{\"error\": \"%s\"}", e.getMessage())));
-    }
+  private OutputMessage processAvro(PipelineStepConfig stepConfig, FlattenedMessage message)
+      throws IOException, RestClientException {
+    Map<String, Object> jsonMap = message.getValue().read("$");
+    String subject = stepConfig.getOutputSubject();
+    String schemaString = schemaRegistryClient.getLatestSchemaMetadata(subject).getSchema();
+    Schema schema = new Schema.Parser().parse(schemaString);
+    GenericRecord avroRecord = AvroUtil.jsonMapToGenericRecord(jsonMap, schema);
+    return new OutputMessage(stepConfig.getOutputTopic(), new AvroOutputValue(avroRecord));
   }
 
-  private OutputMessage processJson(PipelineStepConfig stepConfig, FlattenedMessage message) {
-    try {
-      Map<String, Object> jsonMap = message.getValue().read("$");
-      String jsonString = objectMapper.writeValueAsString(jsonMap);
-      return new OutputMessage(stepConfig.getOutputTopic(), new JsonOutputValue(jsonString));
-    } catch (Exception e) {
-      counterError.increment();
-      logger.error("Error processing JSON message: {}", e.getMessage(), e);
-      return new OutputMessage(
-          this.dlqTopicName,
-          new JsonOutputValue(String.format("{\"error\": \"%s\"}", e.getMessage())));
-    }
+  private OutputMessage processJson(PipelineStepConfig stepConfig, FlattenedMessage message)
+      throws IOException {
+    Map<String, Object> jsonMap = message.getValue().read("$");
+    String jsonString = objectMapper.writeValueAsString(jsonMap);
+    return new OutputMessage(stepConfig.getOutputTopic(), new JsonOutputValue(jsonString));
   }
 }
