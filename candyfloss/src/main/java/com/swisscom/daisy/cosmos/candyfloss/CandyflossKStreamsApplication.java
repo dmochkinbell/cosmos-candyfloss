@@ -65,7 +65,7 @@ public class CandyflossKStreamsApplication {
         appConf
             .getKafkaProperties()
             .getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
-
+    logger.info("Schema registry url loaded: {}", schemaRegistryUrl);
     if (schemaRegistryUrl != null && !schemaRegistryUrl.isEmpty()) {
       try {
         schemaRegistryClient = new CachedSchemaRegistryClient(schemaRegistryUrl, 100);
